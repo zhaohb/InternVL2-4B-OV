@@ -90,7 +90,7 @@ model = AutoModel.from_pretrained(
 tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True, use_fast=False)
 
 # set the max number of tiles in `max_num`
-pixel_values = load_image('../InternVL2-4B/examples/image1.jpg', max_num=12).to(torch.bfloat16)
+pixel_values = load_image('./test.jpg', max_num=12).to(torch.bfloat16)
 generation_config = dict(max_new_tokens=1024, do_sample=False)
 
 question = 'Hello, who are you?'
