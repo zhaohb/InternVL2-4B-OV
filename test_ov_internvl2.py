@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--model_id", required=True, help="model_id or directory for loading")
     parser.add_argument("-o", "--output_dir", required=True, help="output directory for saving model")
     parser.add_argument('-d', '--device', default='CPU', help='inference device')
-    parser.add_argument('-pic', '--picture', default="./moondream.jpg", help='picture file')
+    parser.add_argument('-pic', '--picture', default="./test.jpg", help='picture file')
     parser.add_argument('-p', '--prompt', default="Describe this image.", help='prompt')
     parser.add_argument('-max', '--max_new_tokens', default=256, help='max_new_tokens')
     parser.add_argument('-int4', '--int4_compress', action="store_true", help='int4 weights compress')
@@ -42,6 +42,10 @@ if __name__ == '__main__':
     core = ov.Core()
     internvl2_model = OVInternVLForCausalLM(core=core, ov_model_path=ov_model_path, device=device, int4_compress=int4_compress, llm_infer_list=llm_infer_list)
 
+    version = ov.get_version()
+    print("OpenVINO version \n", version)
+    print('\n')
+
     generation_config = {
             "bos_token_id": internvl2_model.tokenizer.bos_token_id,
             "pad_token_id": internvl2_model.tokenizer.bos_token_id,
@@ -51,9 +55,10 @@ if __name__ == '__main__':
     question = 'Hello, who are you?'
     response, history = internvl2_model.chat(None, question, generation_config, history=None, return_history=True)
     print(f'User: {question}\nAssistant: {response}')
+    print("\n")
 
     for i in range(2):
-        pixel_values = internvl2_model.load_image("../InternVL2-4B/examples/image1.jpg")
+        pixel_values = internvl2_model.load_image(picture_path)
 
         generation_config = {
             "bos_token_id": internvl2_model.tokenizer.bos_token_id,
@@ -68,7 +73,7 @@ if __name__ == '__main__':
 
         ## i= 0 is warming up
         if i != 0:
-            print("\n\n")
+            print("\n")
             if len(llm_infer_list) > 1:
                 avg_token = sum(llm_infer_list[1:]) / (len(llm_infer_list) - 1)
                 print(f"First token latency: {llm_infer_list[0]:.2f} ms, Output len {len(llm_infer_list) - 1}, Avage token latency: {avg_token:.2f} ms")
