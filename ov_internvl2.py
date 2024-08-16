@@ -346,50 +346,6 @@ class LlmEmbdModel():
 
         ov.save_model(ov_model, Path(f"{self.ov_model_path}/llm_embd.xml"))
 
-class VisionEmbedsModel():
-    def __init__(
-        self,
-        model=None,
-        ov_model_path=None,
-        device='CPU',
-        fp16=False,
-    ):
-        self.name = "Vision Embeds Model"
-        self.model = model
-        self.device=device
-        self.ov_model_path = ov_model_path
-        self.fp16=fp16
-        self.inputs_dict = {}
-
-    def get_model(self):
-        return self.model.vision_model.embeddings
-
-    def get_input_names(self):
-        return ['pixel_values']
-
-    def get_output_names(self):
-        outputs = ['vision_embeds']
-        return outputs
-
-    def get_sample_input(self):
-            pass
-
-    def convert_sdpa_ov(self):
-        encoder_model = self.get_model()       
-        pixel_values =  torch.rand(( 13, 3, 743, 2048), dtype=torch.float32)
-        ov_model = ov.convert_model(
-            encoder_model,
-            example_input={
-                "pixel_values": pixel_values,
-             },
-        )
-        for input, input_name in zip(ov_model.inputs, self.get_input_names()):
-            input.get_tensor().set_names({input_name})
-        for output, output_name in zip(ov_model.outputs, self.get_output_names()):
-            output.get_tensor().set_names({output_name})
-
-        ov.save_model(ov_model, Path(f"{self.ov_model_path}/vision_embeds.xml"))
-
 class VisionMlpModel():
     def __init__(
         self,
@@ -614,8 +570,6 @@ class InternVL2_OV:
             self.tokenizer = tokenizer
 
         self.int4_compress = int4_compress
-        # self.vision_encoder_model = VisionEncoderModel(model=self.model, ov_model_path=ov_model_path, device=device)
-        # self.vision_embeds_model = VisionEmbedsModel(model=self.model, ov_model_path=ov_model_path, device=device)
         self.vision_model = VisionModel(model=self.model, ov_model_path=ov_model_path, device=device)
         self.vision_mlp_model = VisionMlpModel(model=self.model, ov_model_path=ov_model_path, device=device)
 
@@ -623,8 +577,6 @@ class InternVL2_OV:
         self.llm_stateful_model = LlmStatefulModel(model=self.model, tokenizer= self.tokenizer, ov_model_path=ov_model_path, device=device, int4_compress=self.int4_compress)
 
     def export_vision_to_ov(self):
-        # self.vision_encoder_model.convert_sdpa_ov()
-        # self.vision_embeds_model.convert_sdpa_ov()
         self.vision_model.convert_sdpa_ov()
         self.vision_mlp_model.convert_sdpa_ov()
         self.llm_embed_model.convert_sdpa_ov()
