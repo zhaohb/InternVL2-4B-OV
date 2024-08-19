@@ -640,7 +640,9 @@ class OVInternVLForCausalLM(GenerationMixin):
 
     def vision_model_init(self):
         self.vision_encoder_model = self.core.read_model(Path(f"{self.ov_model_path}/vision.xml"))
-        self.vision_encoder_compiled_model = self.core.compile_model(self.vision_encoder_model, self.ov_device, config = {'INFERENCE_PRECISION_HINT': 'f32'})
+        # self.vision_encoder_compiled_model = self.core.compile_model(self.vision_encoder_model, self.ov_device, config = {'INFERENCE_PRECISION_HINT': 'f32'})
+        self.vision_encoder_compiled_model = self.core.compile_model(self.vision_encoder_model, self.ov_device)
+
         self.vision_encoder_request = self.vision_encoder_compiled_model.create_infer_request()
 
         self.vision_mlp_model = self.core.read_model(Path(f"{self.ov_model_path}/vision_mlp.xml"))
