@@ -43,7 +43,7 @@ LLM Model First token latency: 13710.83 ms, Output len: 74, Avage token latency:
 ### Note:
 After the command is executed, the IR of OpenVINO will be saved in the directory /path/to/internvl2_ov. If the existence of /path/to/internvl2_ov is detected, the model conversion process will be skipped and the IR of OpenVINO will be loaded directly.
 
-The model: [Model link]()
+The model: [Model link](https://hf-mirror.com/OpenGVLab/InternVL2-4B/tree/main)
 ### Parsing test_ov_internvl2.py's arguments :
 ```shell
 usage: Export InternVL2 Model to IR [-h] [-m MODEL_ID] -ov OV_IR_DIR [-d DEVICE] [-pic PICTURE] [-p PROMPT] [-max MAX_NEW_TOKENS] [-int4]
