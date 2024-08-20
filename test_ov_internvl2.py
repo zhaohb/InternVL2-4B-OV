@@ -8,8 +8,8 @@ import time
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("Export InternVL2 Model to IR", add_help=True)
-    parser.add_argument("-m", "--model_id", required=True, help="model_id or directory for loading")
-    parser.add_argument("-o", "--output_dir", required=True, help="output directory for saving model")
+    parser.add_argument("-m", "--model_id", required=False, help="model_id or directory for loading")
+    parser.add_argument("-ov", "--ov_ir_dir", required=True, help="output directory for saving model")
     parser.add_argument('-d', '--device', default='CPU', help='inference device')
     parser.add_argument('-pic', '--picture', default="./test.jpg", help='picture file')
     parser.add_argument('-p', '--prompt', default="Describe this image.", help='prompt')
@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     model_id = args.model_id
-    ov_model_path = args.output_dir
+    ov_model_path = args.ov_ir_dir
     device = args.device
     max_new_tokens = args.max_new_tokens
     picture_path = args.picture
@@ -39,8 +39,9 @@ if __name__ == '__main__':
         del internvl2_ov
     
     llm_infer_list = []
+    vision_infer = []
     core = ov.Core()
-    internvl2_model = OVInternVLForCausalLM(core=core, ov_model_path=ov_model_path, device=device, int4_compress=int4_compress, llm_infer_list=llm_infer_list)
+    internvl2_model = OVInternVLForCausalLM(core=core, ov_model_path=ov_model_path, device=device, int4_compress=int4_compress, llm_infer_list=llm_infer_list, vision_infer=vision_infer)
 
     version = ov.get_version()
     print("OpenVINO version \n", version)
@@ -74,9 +75,10 @@ if __name__ == '__main__':
         ## i= 0 is warming up
         if i != 0:
             print("\n")
+            print(f"Vision Pre latency: {vision_infer[0]:.2f} ms, Vision encoder latency: {vision_infer[1]:.2f} ms, Vision Post latency: {vision_infer[2]:.2f} ms, Vision Mlp latency: {vision_infer[3]:.2f} ms")
             if len(llm_infer_list) > 1:
                 avg_token = sum(llm_infer_list[1:]) / (len(llm_infer_list) - 1)
-                print(f"First token latency: {llm_infer_list[0]:.2f} ms, Output len {len(llm_infer_list) - 1}, Avage token latency: {avg_token:.2f} ms")
+                print(f"LLM Model First token latency: {llm_infer_list[0]:.2f} ms, Output len: {len(llm_infer_list) - 1}, Avage token latency: {avg_token:.2f} ms")
 
 
 

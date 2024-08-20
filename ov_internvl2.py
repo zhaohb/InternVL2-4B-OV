@@ -590,6 +590,7 @@ class OVInternVLForCausalLM(GenerationMixin):
         device='CPU',
         int4_compress=False,
         llm_infer_list=[],
+        vision_infer=[],
     ):
         self.ov_model_path = ov_model_path
         self.core = core
@@ -630,6 +631,7 @@ class OVInternVLForCausalLM(GenerationMixin):
         self.vision_model_init()
 
         self.llm_infer_list = llm_infer_list
+        self.vision_infer = vision_infer
 
         self.conv_template = get_conv_template("phi3-chat")
         self.system_message = self.conv_template.system_message
@@ -667,15 +669,30 @@ class OVInternVLForCausalLM(GenerationMixin):
         return torch.from_numpy(self.vision_mlp_request.get_tensor("vit_mlp").data)
     
     def load_image(self, image):
+        self.vision_infer.clear()
+        vision_pre_start = time.perf_counter()
         pixel_values = self.vision_pre_process.load_image(image)
+        vision_pre_end = time.perf_counter()
+        vision_pre_time = (vision_pre_end - vision_pre_start) * 1000
+        self.vision_infer.append(vision_pre_time)
 
         return pixel_values
 
     def vision_model(self, pixel_values):
+        encoder_start = time.perf_counter()
         vision_output = self.vision_encoder_run(pixel_values=pixel_values)
+        encoder_end = time.perf_counter()
         vit_embeds = self.vision_middle_process.postprocess(vit_embeds=vision_output)
+        mlp_start = time.perf_counter()
         vit_mlp = self.vision_mlp_run(vit_embeds=vit_embeds)
-
+        mlp_end = time.perf_counter()
+        encoder_time = (encoder_end - encoder_start) * 1000
+        mlp_time = (mlp_end - mlp_start) * 1000
+        vision_post_time = (mlp_start - encoder_end) * 1000
+        self.vision_infer.append(encoder_time)
+        self.vision_infer.append(mlp_time)
+        self.vision_infer.append(vision_post_time)
+        
         return vit_mlp
 
     def can_generate(self):
