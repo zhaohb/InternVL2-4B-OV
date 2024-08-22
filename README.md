@@ -20,7 +20,7 @@ pip install torchvision
 ```shell
 cd InternVL2-4B-OV
 #for MTL iGPU windows
-python.exe .\test_ov_internvl2.py -ov ..\internvl2_ov\ -int4 -d GPU.0
+python.exe .\test_ov_internvl2.py -m /path/to/internvl2 -ov ..\internvl2_ov\ -int4 -d GPU.0
 
 #output
 INFO:nncf:NNCF initialized successfully. Supported frameworks detected: torch, onnx, openvino
@@ -34,13 +34,13 @@ Assistant: I am an AI assistant whose name is InternVL, developed jointly by Sha
 
 User: <image>
 Please describe the image shortly.
-Assistant: The image features a red panda, a species native to China, with its distinctive red fur and white face. The panda is perched on a wooden platform, with its head resting on a wooden beam. The background shows green foliage, suggesting a natural or semi-natural habitat.
+Assistant: The image features a close-up view of a red panda resting on a wooden platform. The panda is characterized by its distinctive red fur, white face, and ears. The background shows a natural setting with green foliage and a wooden structure.
 User: <image>
 Please describe the image shortly.
-Assistant: The image features a red panda, a species native to China, with its distinctive red fur and white face. The panda is perched on a wooden platform, with its head resting on a wooden beam. The background shows green foliage, suggesting a natural or semi-natural habitat.
+Assistant: The image features a close-up view of a red panda resting on a wooden platform. The panda is characterized by its distinctive red fur, white face, and ears. The background shows a natural setting with green foliage and a wooden structure.
 
-Vision Pre latency: 66.18 ms, Vision encoder latency: 4741.70 ms, Vision Post latency: 42.73 ms, Vision Mlp latency: 19.14 ms
-LLM Model First token latency: 14256.23 ms, Output len: 62, Avage token latency: 163.01 ms
+Vision Pre latency: 226.53 ms, Vision encoder latency: 4881.63 ms, Vision Post latency: 45.78 ms, Vision Mlp latency: 42.10 ms
+LLM Model First token latency: 8775.91 ms, Output len: 55, Avage token latency: 84.71 ms
 ```
 ### Note:
 After the command is executed, the IR of OpenVINO will be saved in the directory /path/to/internvl2_ov. If the existence of /path/to/internvl2_ov is detected, the model conversion process will be skipped and the IR of OpenVINO will be loaded directly.
