@@ -432,6 +432,14 @@ class VisionModel():
             input.get_tensor().set_names({input_name})
         for output, output_name in zip(ov_model.outputs, self.get_output_names()):
             output.get_tensor().set_names({output_name})
+        
+        ## for iGPU
+        shapes = {}     
+        for input_layer  in ov_model.inputs:
+            shapes[input_layer] = input_layer.partial_shape
+            shapes[input_layer][2] = 448  #w
+            shapes[input_layer][3] = 448  #h
+        ov_model.reshape(shapes)
 
         ov.save_model(ov_model, Path(f"{self.ov_model_path}/vision.xml"))
 
