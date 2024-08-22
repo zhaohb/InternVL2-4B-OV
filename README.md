@@ -15,6 +15,11 @@ pip install nncf
 pip install transformers==4.37.2
 pip install torch
 pip install torchvision
+
+Additional Operations
+1. download InternVL2-4B model
+2. Replace the modeling_phi3.py in the official model directory with the modeling_phi3.py in this project.
+3. Delete the CUDA API under the model file.
 ```
 ### Convert InternVL2 model to OpenVINO™ IR(Intermediate Representation) and testing:
 ```shell
