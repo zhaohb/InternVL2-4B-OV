@@ -27,7 +27,12 @@ from PIL import Image
 from typing import Optional, Tuple, List, Union
 
 import openvino as ov
+from openvino.runtime import Core, Type
+from openvino.runtime.passes import Manager, MatcherPass, WrapType, Matcher
+from openvino.runtime import opset10 as ops
+from openvino.preprocess import PrePostProcessor
 import nncf
+
 import time
 import warnings
 
@@ -206,6 +211,49 @@ def patch_stateful(ov_model):
         None,
     )   
 
+class InsertSlice(MatcherPass):
+    def __init__(self):
+        MatcherPass.__init__(self)
+        self.model_changed = False
+
+        param = WrapType("opset10.Result")
+
+        def callback(matcher: Matcher) -> bool:
+            root = matcher.get_match_root()
+            print("root: ", root)
+            if root is None:
+                return False
+            root_output = matcher.get_match_value()
+            print("root_output", root_output)
+            root_name = root.get_friendly_name()
+            if (len(root.get_output_partial_shape(0)) == 3):
+                print(f"Find target root node name: {root_name}")
+                parent = root.input_value(0).get_node()
+                print(f"Find target parent node name: {parent.get_friendly_name()}")
+                grand_parent = parent.input_value(0).get_node()
+                print(f"Find grandparent node name: {grand_parent.get_friendly_name()}")
+                grand_parent_output = parent.input(0).get_source_output()
+                print("grand_parent_output: ", grand_parent_output)
+                consumers = grand_parent_output.get_target_inputs()
+                
+                print(f"consumers: {consumers}")
+                print("Original reshape node output shape:", grand_parent_output.get_partial_shape())
+                start = np.array([0, -1, 0], dtype=np.int32)
+                stop = np.array([1, -2, 3072], dtype=np.int32)
+                step = np.array([1, -1, 1], dtype=np.int32)
+                axes = np.array([0, 1, 2], dtype=np.int32)
+                slice = ops.slice(grand_parent, start, stop, step, axes, name="inserted_slice")
+                print("After insert slice node, output shape:", slice.output(0).get_partial_shape())
+
+                for consumer in consumers:
+                    consumer.replace_source_output(slice.output(0))
+                self.model_changed = True
+                # Use new operation for additional matching
+                self.register_new_node(slice)
+                                
+                return True
+
+        self.register_matcher(Matcher(param,"InsertSlice"), callback)
 class LlmStatefulModel():
     def __init__(
         self,
@@ -281,6 +329,9 @@ class LlmStatefulModel():
             output.get_tensor().set_names({output_name})
 
         patch_stateful(ov_model)
+        manager = Manager()
+        manager.register_pass(InsertSlice())
+        manager.run_passes(ov_model)
 
         ov.save_model(ov_model, Path(f"{self.ov_model_path}/llm_stateful.xml"))
         self.save_tokenizer(self.tokenizer, self.ov_model_path)
@@ -390,6 +441,14 @@ class VisionMlpModel():
 
         ov.save_model(ov_model, Path(f"{self.ov_model_path}/vision_mlp.xml"))
 
+import requests
+from io import BytesIO
+import numpy as np
+from PIL import Image
+import torch
+from datasets import load_dataset
+import tqdm
+
 class VisionModel():
     def __init__(
         self,
@@ -397,6 +456,7 @@ class VisionModel():
         ov_model_path=None,
         device='CPU',
         fp16=False,
+        int8_quant=False,
     ):
         self.name = "Vision Encoder Model"
         self.model = model
@@ -404,6 +464,8 @@ class VisionModel():
         self.ov_model_path = ov_model_path
         self.fp16=fp16
         self.inputs_dict = {}
+        self.vision_pre_process = Preprocess()
+        self.int8_quant = int8_quant
 
     def get_model(self):
         return self.model.vision_model
@@ -418,9 +480,70 @@ class VisionModel():
     def get_sample_input(self):
             pass
 
+    def get_pil_from_url(self, url):
+        """
+        Downloads and converts an image from a URL to a PIL Image object.
+        """
+        response = requests.get(url, verify=False, timeout=20)
+        image = Image.open(BytesIO(response.content))
+        return image.convert("RGB")
+
+    def collate_fn(self, example, image_column="image_url"):
+        """
+        Preprocesses an example by loading and transforming image and text data.
+        Checks if the text data in the example is valid by calling the `check_text_data` function.
+        Downloads the image specified by the URL in the image_column by calling the `get_pil_from_url` function.
+        If there is any error during the download process, returns None.
+        Returns the preprocessed inputs with transformed image and text data.
+        """
+        # print(example, image_column)
+        assert len(example) == 1
+        example = example[0]
+        url = example[image_column]
+        try:
+            image = self.get_pil_from_url(url)
+            h, w = image.size
+            # print("h, w: ", h,w)
+            if h == 1 or w == 1:
+                return None
+        except Exception:
+            return None
+
+        inputs = self.vision_pre_process.load_image_quant(image)
+        return inputs
+    
+    def prepare_calibration_data(self, dataloader, init_steps):
+        """
+        This function prepares calibration data from a dataloader for a specified number of initialization steps.
+        It iterates over the dataloader, fetching batches and storing the relevant data.
+        """
+        data = []
+        print(f"Fetching {init_steps} samples for the initialization...")
+        for batch in dataloader:
+            if len(data) == init_steps:
+                break
+            if batch is not None:
+                with torch.no_grad():
+                    data.append(
+                        {
+                            "pixel_values": batch
+                        })
+        return data
+
+    def prepare_dataset(self, opt_init_steps=50, max_train_samples=1000):
+        """
+        Prepares a vision-text dataset for quantization.
+        """
+        dataset = load_dataset("google-research-datasets/conceptual_captions", trust_remote_code=True)
+        train_dataset = dataset["train"].shuffle(seed=42)
+        dataloader = torch.utils.data.DataLoader(train_dataset, collate_fn=self.collate_fn, batch_size=1, num_workers=8, pin_memory=True)
+        # breakpoint()
+        calibration_data = self.prepare_calibration_data(dataloader, opt_init_steps)
+        return calibration_data
+
     def convert_sdpa_ov(self):
         vison_model = self.get_model()       
-        pixel_values =  torch.rand(( 1, 3, 743, 2048), dtype=torch.float32)
+        pixel_values =  torch.rand(( 1, 3, 448, 448), dtype=torch.float32)
         ov_model = ov.convert_model(
             vison_model,
             example_input={
@@ -440,8 +563,21 @@ class VisionModel():
             shapes[input_layer][2] = 448  #w
             shapes[input_layer][3] = 448  #h
         ov_model.reshape(shapes)
-
         ov.save_model(ov_model, Path(f"{self.ov_model_path}/vision.xml"))
+        
+        if self.int8_quant:
+            calibration_data = self.prepare_dataset()
+            calibration_dataset = nncf.Dataset(calibration_data)
+            quantized_model = nncf.quantize(
+                model=ov_model,
+                calibration_dataset=calibration_dataset,
+                model_type=nncf.ModelType.TRANSFORMER,
+                subset_size=len(calibration_data),
+                # Smooth Quant algorithm reduces activation quantization error; optimal alpha value was obtained through grid search
+                advanced_parameters=nncf.AdvancedQuantizationParameters(smooth_quant_alpha=0.6)
+            )
+
+            ov.save_model(quantized_model, Path(f"{self.ov_model_path}/vision_int8.xml"))
 
 class Preprocess:
     def __init__(self):
@@ -511,6 +647,14 @@ class Preprocess:
             processed_images.append(thumbnail_img)
         return processed_images
 
+    def load_image_quant(self, image, input_size=448, max_num=12):
+        # image = Image.open(image_file).convert('RGB')
+        transform = self.build_transform(input_size=input_size)
+        images = self.dynamic_preprocess(image, image_size=input_size, use_thumbnail=True, max_num=max_num)
+        pixel_values = [transform(image) for image in images]
+        pixel_values = torch.stack(pixel_values)
+        return pixel_values
+    
     def load_image(self, image_file, input_size=448, max_num=12):
         image = Image.open(image_file).convert('RGB')
         transform = self.build_transform(input_size=input_size)
@@ -562,7 +706,7 @@ class Postprocess:
         return vit_embeds
 
 class InternVL2_OV:
-    def __init__(self, pretrained_model_path=None, model=None, tokenizer=None, ov_model_path='/tmp/moonstream2_ov/', device='CPU', int4_compress=False):
+    def __init__(self, pretrained_model_path=None, model=None, tokenizer=None, ov_model_path='/tmp/moonstream2_ov/', device='CPU', int4_compress=False, int8_quant=False):
 
         if model is None and pretrained_model_path:        
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -578,7 +722,8 @@ class InternVL2_OV:
             self.tokenizer = tokenizer
 
         self.int4_compress = int4_compress
-        self.vision_model = VisionModel(model=self.model, ov_model_path=ov_model_path, device=device)
+        self.int8_quant = int8_quant
+        self.vision_model = VisionModel(model=self.model, ov_model_path=ov_model_path, device=device, int8_quant=self.int8_quant)
         self.vision_mlp_model = VisionMlpModel(model=self.model, ov_model_path=ov_model_path, device=device)
 
         self.llm_embed_model = LlmEmbdModel(model=self.model, ov_model_path=ov_model_path, device=device)
@@ -597,6 +742,7 @@ class OVInternVLForCausalLM(GenerationMixin):
         ov_model_path=None,
         device='CPU',
         int4_compress=False,
+        int8_quant=False,
         llm_infer_list=[],
         vision_infer=[],
     ):
@@ -604,6 +750,7 @@ class OVInternVLForCausalLM(GenerationMixin):
         self.core = core
         self.ov_device = device
         self.int4_compress = int4_compress
+        self.int8_quant = int8_quant
 
         if int4_compress:
             self.llm_model = core.read_model(Path(f"{ov_model_path}/llm_stateful_int4.xml"))
@@ -649,7 +796,10 @@ class OVInternVLForCausalLM(GenerationMixin):
  
 
     def vision_model_init(self):
-        self.vision_encoder_model = self.core.read_model(Path(f"{self.ov_model_path}/vision.xml"))
+        if self.int8_quant:
+            self.vision_encoder_model = self.core.read_model(Path(f"{self.ov_model_path}/vision_int8.xml"))
+        else:
+            self.vision_encoder_model = self.core.read_model(Path(f"{self.ov_model_path}/vision.xml"))
         # self.vision_encoder_compiled_model = self.core.compile_model(self.vision_encoder_model, self.ov_device, config = {'INFERENCE_PRECISION_HINT': 'f32'})
         self.vision_encoder_compiled_model = self.core.compile_model(self.vision_encoder_model, self.ov_device)
 
