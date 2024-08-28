@@ -2,7 +2,10 @@
 ### 2024/08/15
 1. InternVL2-4B model supports using openvino to accelerate the inference process. Currently only verified on Linux system and only tested on CPU platform.
 ### 2024/08/22
-1. Support for integrated graphics on MTL
+1. Support for integrated graphics on MTL, support Windows system.
+### 2024/08/28
+1. Add slice to llm model to optimize calculation
+2. Add int8 quantization to vision model
 
 ## Running Guide
 ### Installation
@@ -25,7 +28,7 @@ Additional Operations
 ```shell
 cd InternVL2-4B-OV
 #for MTL iGPU windows
-python.exe .\test_ov_internvl2.py -m /path/to/internvl2 -ov ..\internvl2_ov\ -int4 -d GPU.0
+python.exe .\test_ov_internvl2.py -m /path/to/internvl2 -ov ..\internvl2_ov\ -llm_int4 -vision_int8 -d GPU.0
 
 #output
 INFO:nncf:NNCF initialized successfully. Supported frameworks detected: torch, onnx, openvino
@@ -53,7 +56,7 @@ After the command is executed, the IR of OpenVINO will be saved in the directory
 The model: [Model link](https://hf-mirror.com/OpenGVLab/InternVL2-4B/tree/main)
 ### Parsing test_ov_internvl2.py's arguments :
 ```shell
-usage: Export InternVL2 Model to IR [-h] [-m MODEL_ID] -ov OV_IR_DIR [-d DEVICE] [-pic PICTURE] [-p PROMPT] [-max MAX_NEW_TOKENS] [-int4]
+usage: Export InternVL2 Model to IR [-h] [-m MODEL_ID] -ov OV_IR_DIR [-d DEVICE] [-pic PICTURE] [-p PROMPT] [-max MAX_NEW_TOKENS] [-llm_int4] [-vision_int8]
 
 options:
   -h, --help            show this help message and exit
@@ -69,7 +72,8 @@ options:
                         prompt
   -max MAX_NEW_TOKENS, --max_new_tokens MAX_NEW_TOKENS
                         max_new_tokens
-  -int4, --int4_compress
-                        int4 weights compress
+  -llm_int4, --int4_compress
+                        llm int4 weights compress
+  -vision_int8, --int8_quant
+                        vision int8 weights qiamtize
 ```
-
