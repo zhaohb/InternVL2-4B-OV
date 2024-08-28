@@ -536,7 +536,7 @@ class VisionModel():
         """
         dataset = load_dataset("google-research-datasets/conceptual_captions", trust_remote_code=True)
         train_dataset = dataset["train"].shuffle(seed=42)
-        dataloader = torch.utils.data.DataLoader(train_dataset, collate_fn=self.collate_fn, batch_size=1, num_workers=8, pin_memory=True)
+        dataloader = torch.utils.data.DataLoader(train_dataset, collate_fn=self.collate_fn, batch_size=1, pin_memory=True)
         # breakpoint()
         calibration_data = self.prepare_calibration_data(dataloader, opt_init_steps)
         return calibration_data
@@ -566,6 +566,7 @@ class VisionModel():
         ov.save_model(ov_model, Path(f"{self.ov_model_path}/vision.xml"))
         
         if self.int8_quant:
+
             calibration_data = self.prepare_dataset()
             calibration_dataset = nncf.Dataset(calibration_data)
             quantized_model = nncf.quantize(
@@ -576,7 +577,14 @@ class VisionModel():
                 # Smooth Quant algorithm reduces activation quantization error; optimal alpha value was obtained through grid search
                 advanced_parameters=nncf.AdvancedQuantizationParameters(smooth_quant_alpha=0.6)
             )
-
+            ## for iGPU
+            shapes = {}     
+            for input_layer  in quantized_model.inputs:
+                shapes[input_layer] = input_layer.partial_shape
+                shapes[input_layer][0] = 1  #w
+                shapes[input_layer][2] = 448  #w
+                shapes[input_layer][3] = 448  #h
+            quantized_model.reshape(shapes)
             ov.save_model(quantized_model, Path(f"{self.ov_model_path}/vision_int8.xml"))
 
 class Preprocess:
@@ -838,7 +846,17 @@ class OVInternVLForCausalLM(GenerationMixin):
 
     def vision_model(self, pixel_values):
         encoder_start = time.perf_counter()
-        vision_output = self.vision_encoder_run(pixel_values=pixel_values)
+        if self.int8_quant:
+            ### in MTL platform , we set vision model batch = 1, so we unroll the loop
+            vision_output = []
+            batch = pixel_values.shape[0]
+            for i in range(batch):
+                pixel_value = pixel_values[i].unsqueeze(0)
+                v_o = self.vision_encoder_run(pixel_values=pixel_value)
+                vision_output.append(v_o)
+            vision_output = torch.stack(vision_output, 0).squeeze(1)    
+        else:
+            vision_output = self.vision_encoder_run(pixel_values=pixel_values)
         encoder_end = time.perf_counter()
         vit_embeds = self.vision_middle_process.postprocess(vit_embeds=vision_output)
         mlp_start = time.perf_counter()
