@@ -714,7 +714,7 @@ class Postprocess:
         return vit_embeds
 
 class InternVL2_OV:
-    def __init__(self, pretrained_model_path=None, model=None, tokenizer=None, ov_model_path='/tmp/moonstream2_ov/', device='CPU', int4_compress=False, int8_quant=False):
+    def __init__(self, pretrained_model_path=None, model=None, tokenizer=None, ov_model_path='/tmp/moonstream2_ov/', device='CPU', llm_int4_compress=False, vision_int8_quant=False):
 
         if model is None and pretrained_model_path:        
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -729,8 +729,8 @@ class InternVL2_OV:
             self.model = model
             self.tokenizer = tokenizer
 
-        self.int4_compress = int4_compress
-        self.int8_quant = int8_quant
+        self.int4_compress = llm_int4_compress
+        self.int8_quant = vision_int8_quant
         self.vision_model = VisionModel(model=self.model, ov_model_path=ov_model_path, device=device, int8_quant=self.int8_quant)
         self.vision_mlp_model = VisionMlpModel(model=self.model, ov_model_path=ov_model_path, device=device)
 
@@ -749,22 +749,33 @@ class OVInternVLForCausalLM(GenerationMixin):
         core=None,
         ov_model_path=None,
         device='CPU',
-        int4_compress=False,
-        int8_quant=False,
+        llm_int4_compress=False, 
+        vision_int8_quant=False, 
+        llm_int8_quant=False,
         llm_infer_list=[],
         vision_infer=[],
     ):
         self.ov_model_path = ov_model_path
         self.core = core
         self.ov_device = device
-        self.int4_compress = int4_compress
-        self.int8_quant = int8_quant
+        self.llm_int4_compress = llm_int4_compress
+        self.vision_int8_quant = vision_int8_quant
+        self.llm_int8_quant = llm_int8_quant
 
-        if int4_compress:
+        ov_config = {
+            "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32",
+            "PERFORMANCE_HINT": "LATENCY",
+            "NUM_STREAMS": "1",
+            "CACHE_DIR": "",
+        }
+
+        if llm_int4_compress:
             self.llm_model = core.read_model(Path(f"{ov_model_path}/llm_stateful_int4.xml"))
-            self.llm_compiled_model = core.compile_model(self.llm_model, device)
         else:
             self.llm_model = core.read_model(Path(f"{ov_model_path}/llm_stateful.xml"))
+        if llm_int8_quant:
+            self.llm_compiled_model = core.compile_model(self.llm_model, device, config = ov_config)
+        else:
             self.llm_compiled_model = core.compile_model(self.llm_model, device)
             
         self.llm_request = self.llm_compiled_model.create_infer_request()
@@ -804,7 +815,7 @@ class OVInternVLForCausalLM(GenerationMixin):
  
 
     def vision_model_init(self):
-        if self.int8_quant:
+        if self.vision_int8_quant:
             self.vision_encoder_model = self.core.read_model(Path(f"{self.ov_model_path}/vision_int8.xml"))
         else:
             self.vision_encoder_model = self.core.read_model(Path(f"{self.ov_model_path}/vision.xml"))
@@ -846,7 +857,7 @@ class OVInternVLForCausalLM(GenerationMixin):
 
     def vision_model(self, pixel_values):
         encoder_start = time.perf_counter()
-        if self.int8_quant:
+        if self.vision_int8_quant:
             ### in MTL platform , we set vision model batch = 1, so we unroll the loop
             vision_output = []
             batch = pixel_values.shape[0]

@@ -14,8 +14,9 @@ if __name__ == '__main__':
     parser.add_argument('-pic', '--picture', default="./test.jpg", help='picture file')
     parser.add_argument('-p', '--prompt', default="Describe this image.", help='prompt')
     parser.add_argument('-max', '--max_new_tokens', default=256, help='max_new_tokens')
-    parser.add_argument('-llm_int4', '--int4_compress', action="store_true", help='llm int4 weights compress')
-    parser.add_argument('-vision_int8', '--int8_quant', action="store_true", help='vision int8 weights qiamtize')
+    parser.add_argument('-llm_int4_com', '--llm_int4_compress', action="store_true", help='llm int4 weights compress')
+    parser.add_argument('-vision_int8', '--vision_int8_quant', action="store_true", help='vision int8 weights quantize')
+    parser.add_argument('-llm_int8_quant', '--llm_int8_quant', action="store_true", help='llm int8 weights quantize')
 
     args = parser.parse_args()
     model_id = args.model_id
@@ -24,17 +25,18 @@ if __name__ == '__main__':
     max_new_tokens = args.max_new_tokens
     picture_path = args.picture
     question = args.prompt
-    int4_compress = args.int4_compress
-    int8_quant = args.int8_quant
+    llm_int4_compress = args.llm_int4_compress
+    vision_int8_quant = args.vision_int8_quant
+    llm_int8_quant = args.llm_int8_quant
 
     if not Path(ov_model_path).exists():
-        internvl2_ov = InternVL2_OV(pretrained_model_path=model_id, ov_model_path=ov_model_path, device=device, int4_compress=int4_compress, int8_quant=int8_quant)
+        internvl2_ov = InternVL2_OV(pretrained_model_path=model_id, ov_model_path=ov_model_path, device=device, llm_int4_compress=llm_int4_compress, vision_int8_quant=vision_int8_quant)
         internvl2_ov.export_vision_to_ov()
         del internvl2_ov.model
         del internvl2_ov.tokenizer
         del internvl2_ov
-    elif Path(ov_model_path).exists() and int4_compress is True and not Path(f"{ov_model_path}/llm_stateful_int4.xml").exists():
-        internvl2_ov = InternVL2_OV(pretrained_model_path=model_id, ov_model_path=ov_model_path, device=device, int4_compress=int4_compress, int8_quant=int8_quant)
+    elif Path(ov_model_path).exists() and llm_int4_compress is True and not Path(f"{ov_model_path}/llm_stateful_int4.xml").exists():
+        internvl2_ov = InternVL2_OV(pretrained_model_path=model_id, ov_model_path=ov_model_path, device=device, llm_int4_compress=llm_int4_compress, vision_int8_quant=vision_int8_quant)
         internvl2_ov.export_vision_to_ov()
         del internvl2_ov.model
         del internvl2_ov.tokenizer
@@ -43,7 +45,7 @@ if __name__ == '__main__':
     llm_infer_list = []
     vision_infer = []
     core = ov.Core()
-    internvl2_model = OVInternVLForCausalLM(core=core, ov_model_path=ov_model_path, device=device, int4_compress=int4_compress, int8_quant=int8_quant, llm_infer_list=llm_infer_list, vision_infer=vision_infer)
+    internvl2_model = OVInternVLForCausalLM(core=core, ov_model_path=ov_model_path, device=device, llm_int4_compress=llm_int4_compress, vision_int8_quant=vision_int8_quant, llm_int8_quant=llm_int8_quant, llm_infer_list=llm_infer_list, vision_infer=vision_infer)
 
     version = ov.get_version()
     print("OpenVINO version \n", version)
