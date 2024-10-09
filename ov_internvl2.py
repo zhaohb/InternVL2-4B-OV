@@ -763,7 +763,7 @@ class OVInternVLForCausalLM(GenerationMixin):
         self.llm_int8_quant = llm_int8_quant
 
         ov_config = {
-            "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32",
+            "DYNAMIC_QUANTIZATION_GROUP_SIZE": "128",  #32
             "PERFORMANCE_HINT": "LATENCY",
             "NUM_STREAMS": "1",
             "CACHE_DIR": "",
