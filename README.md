@@ -22,7 +22,8 @@ pip install torchvision
 Additional Operations
 1. download InternVL2-4B model
 2. Replace the modeling_phi3.py in the official model directory with the modeling_phi3.py in this project.
-3. Delete the CUDA API under the model file.
+3. Replace the modeling_intern_vit.py in the official model directory with the modeling_intern_vit.py in this project.
+4. Delete the CUDA API under the model file.
 ```
 ### Convert InternVL2 model to OpenVINO™ IR(Intermediate Representation) and testing:
 ```shell
@@ -52,6 +53,7 @@ LLM Model First token latency: 8775.91 ms, Output len: 55, Avage token latency: 
 ```
 ### Note:
 After the command is executed, the IR of OpenVINO will be saved in the directory /path/to/internvl2_ov. If the existence of /path/to/internvl2_ov is detected, the model conversion process will be skipped and the IR of OpenVINO will be loaded directly.
+
 If you only want to convert the model, you can add the -convert_model_only parameter:
 ```shell
 python.exe .\test_ov_internvl2.py -m /path/to/internvl2 -ov ..\internvl2_ov\ -llm_int4_com -vision_int8 -llm_int8_quan -convert_model_only
