@@ -28,7 +28,7 @@ Additional Operations
 ```shell
 cd InternVL2-4B-OV
 #for MTL iGPU windows
-python.exe .\test_ov_internvl2.py -m /path/to/internvl2 -ov ..\internvl2_ov\ -llm_int4 -vision_int8 -d GPU.0
+python.exe .\test_ov_internvl2.py -m /path/to/internvl2 -ov ..\internvl2_ov\ -llm_int4_com -vision_int8 -llm_int8_quan -d GPU.0
 
 #output
 INFO:nncf:NNCF initialized successfully. Supported frameworks detected: torch, onnx, openvino
@@ -52,11 +52,15 @@ LLM Model First token latency: 8775.91 ms, Output len: 55, Avage token latency: 
 ```
 ### Note:
 After the command is executed, the IR of OpenVINO will be saved in the directory /path/to/internvl2_ov. If the existence of /path/to/internvl2_ov is detected, the model conversion process will be skipped and the IR of OpenVINO will be loaded directly.
+If you only want to convert the model, you can add the -convert_model_only parameter:
+```shell
+python.exe .\test_ov_internvl2.py -m /path/to/internvl2 -ov ..\internvl2_ov\ -llm_int4_com -vision_int8 -llm_int8_quan -convert_model_only
+```
 
 The model: [Model link](https://hf-mirror.com/OpenGVLab/InternVL2-4B/tree/main)
 ### Parsing test_ov_internvl2.py's arguments :
 ```shell
-usage: Export InternVL2 Model to IR [-h] [-m MODEL_ID] -ov OV_IR_DIR [-d DEVICE] [-pic PICTURE] [-p PROMPT] [-max MAX_NEW_TOKENS] [-llm_int4] [-vision_int8]
+usage: Export InternVL2 Model to IR [-h] [-m MODEL_ID] -ov OV_IR_DIR [-d DEVICE] [-pic PICTURE] [-p PROMPT] [-max MAX_NEW_TOKENS] [-llm_int4_com] [-vision_int8] [-llm_int8_quant] [-convert_model_only]
 
 options:
   -h, --help            show this help message and exit
@@ -72,8 +76,12 @@ options:
                         prompt
   -max MAX_NEW_TOKENS, --max_new_tokens MAX_NEW_TOKENS
                         max_new_tokens
-  -llm_int4, --int4_compress
+  -llm_int4_com, --llm_int4_compress
                         llm int4 weights compress
-  -vision_int8, --int8_quant
-                        vision int8 weights qiamtize
+  -vision_int8, --vision_int8_quant
+                        vision int8 weights quantize
+  -llm_int8_quant, --llm_int8_quant
+                        llm int8 weights quantize
+  -convert_model_only, --convert_model_only
+                        convert model to ov only, do not do inference test
 ```
